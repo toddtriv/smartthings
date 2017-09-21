@@ -17,7 +17,7 @@ definition(
     name: "Leave The Light On",
     namespace: "toddtriv",
     author: "Todd Trivette",
-    description: "Turn on a device when a device is not home and it gets dark",
+    description: "Turn on a switch when a device is not home and it gets dark",
     category: "Safety & Security",
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
     iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
@@ -38,41 +38,50 @@ preferences {
 }
 
 def installed() {	
-	subscribe(myMobileDevice, "presence", presenceHandler)    
+    subscribe(myMobileDevice, "presence", presenceHandler)    
 }
 
 def updated() {	
-	unsubscribe()
-	subscribe(myMobileDevice, "presence", presenceHandler)
+    unsubscribe()
+    subscribe(myMobileDevice, "presence", presenceHandler)
+    runOnce(new Date(), presenceHandler)
 }
 
 def presenceHandler(evt) {		    
-    def isAway = (myMobileDevice.currentPresence=="not present")
-    def switchIsOn = (switch1.currentSwitch[0]=="on")
-          
-    if(switchIsOn || (!isAway && !switchIsOn)){    	
-    	log.info "No need to turn on the $switch1.label device. Stop checking...."
-    	unschedule(presenceHandler)
-    	return
-    }  
-                 
-    def now = new Date()
-    def actualSunsetTime = getSunriseAndSunset().sunset;
-    def offsetSunsetTime = getSunriseAndSunset(sunsetOffset: getSunsetOffset()).sunset 
-	       		   
-	if(isAway && (now >= offsetSunsetTime)) {
-		switch1.on()
-		log.info "$switch1.label device was turned on because $myMobileDevice.label is not home"
-	} 
-    else{
-    	log.info "Not time to turn on the $switch1.label device yet, keep checking...."
-    	runEvery10Minutes(presenceHandler)
+    def deviceIsAway = (myMobileDevice.currentPresence=="not present")
+    def switchIsOn = (switch1.currentSwitch[0]=="on")         
+    def now = new Date()    
+    // This may be the actual sunset or adjusted depending on user selection
+    def adjustedTimeOfSunset = getSunriseAndSunset(sunsetOffset: getSunsetOffset()).sunset 	      
+    def paddedSunsetTime = null;
+    
+    // 15 minutes before the time the user has set as darkness
+    use( groovy.time.TimeCategory ) {
+    	paddedSunsetTime = adjustedTimeOfSunset - 15.minutes        
+    }        
+            
+    if(deviceIsAway && !switchIsOn) {
+    	if( now >= adjustedTimeOfSunset ){        
+            switch1.on()
+            log.info "$switch1.label switch was turned on because $myMobileDevice.label is not present"
+        }         
+        else{
+            // If it is close to dark, check back frequently, otherwise don't check frequently
+            def secondsInAMinute = 60
+            def minutes = (now >= paddedSunsetTime ? 5 : 30)
+            runIn(secondsInAMinute * minutes, presenceHandler)
+            log.info "Not time to turn on the $switch1.label switch yet. Check again in $minutes minutes."
+        }
+    } 
+    else{    	
+    	log.info "No need to turn on the $switch1.label switch because ${switchIsOn ? "it is already on" : "$myMobileDevice is present"}."
     }
+    
 }
 
 private getSunsetOffset() {	    
-	if (sunsetOffsetDir == null)
+     if (sunsetOffsetDir == null)
     	return null
       
-	sunsetOffsetValue ? (sunsetOffsetDir == "Before" ? "-$sunsetOffsetValue" : sunsetOffsetValue) : null              
+     sunsetOffsetValue ? (sunsetOffsetDir == "Before" ? "-$sunsetOffsetValue" : sunsetOffsetValue) : null              
 }
