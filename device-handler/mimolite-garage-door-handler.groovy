@@ -17,7 +17,7 @@
  *  Modified By: Todd Trivette
  */
 metadata {	
-	definition (name: "MiMOlite Garage Door Handler", namespace: "toddtriv", author: "John Constantelos") {
+	definition (name: "MiMOlite Device Type", namespace: "toddtriv", author: "John Constantelos") {
         capability "Momentary"
         capability "Relay Switch"
 		capability "Polling"
@@ -38,7 +38,6 @@ metadata {
 		command "off"
         command "open"
         command "close"
-
 	}
 
 	// UI tile definitions 
@@ -84,11 +83,9 @@ metadata {
     }
 }
 
-// The interval in minutes that Device-Watch pings if no device events received
-final int CHECK_DEVICE_INTERVAL_IN_MINUTES = 30;
-
-def updated(){
+def updated(){				
     response( configure() )
+    log.info "$device.displayName was updated...."
 }
 
 def parse(String description) {	
@@ -109,7 +106,7 @@ def parse(String description) {
 	}
 	
     def timeString = new Date().format("MM/dd/yy h:mm a", location.timeZone)
-    sendEvent(name: "statusText", value: "Last updated: "+ timeString)
+    sendEvent(name: "statusText", value: "Last Updated: "+ timeString)
 	return result
 }
 
@@ -124,8 +121,7 @@ def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) {
 	// log.trace "NOT IMPLEMENTED: zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd)" 	
 }
 
-def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicSet cmd){	
-	log.debug "just called BaicSet with $cmd"
+def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicSet cmd){		
 	sensorValueEvent(cmd.value)
 }
 
@@ -207,8 +203,11 @@ def refresh() {
 }
 
 def configure() {
-	log.info "Configuring $device.displayName...." //setting up to monitor power alarm and actuator duration
-    sendEvent(name: "checkInterval", value: CHECK_DEVICE_INTERVAL_IN_MINUTES, displayed: false, data: [protocol: "zwave", hubHardwareId: device.hub.hardwareID])
+	log.info "Configuring $device.displayName...." //setting up to monitor power alarm and actuator duration      
+	
+    // The interval in minutes that Device-Watch pings if no device events received
+	def checkDeviceIntervalInMinutes = 30; 
+    sendEvent(name: "checkInterval", value: (checkDeviceIntervalInMinutes * 60), displayed: false, data: [protocol: "zwave", hubHardwareId: device.hub.hardwareID])	
     
 	delayBetween([
 		zwave.associationV1.associationSet(groupingIdentifier:3, nodeId:[zwaveHubNodeId]).format(),
